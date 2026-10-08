@@ -1,0 +1,21 @@
+{
+  "name": "culture-machine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "文化扭蛋機 MVP",
+  "type": "module",
+  "main": "app.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "build": "npm --prefix web run build"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mysql2": "^3.14.0",
+    "nodemailer": "^7.0.0"
+  }
+}

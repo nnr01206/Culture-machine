@@ -1,0 +1,21 @@
+# Local dev MySQL only (production uses the cPanel MySQL).
+# Start: docker compose up -d    Stop: docker compose stop    Wipe data: docker compose down -v
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: culture-machine-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: culture
+      MYSQL_USER: culture
+      MYSQL_PASSWORD: culture
+      TZ: America/New_York # mimic the US-based host; the app forces UTC per connection anyway
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "33306:3306" # 33306 avoids clashing with any MySQL already on 3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
