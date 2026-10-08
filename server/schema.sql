@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   INDEX idx_sessions_email (email)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- An activity is a long-lived entry point with a fixed QR code (decision 13).
+-- UI name: QR 點位. A long-lived entry point with a fixed, reusable QR code (e.g. the bookstore).
 CREATE TABLE IF NOT EXISTS activities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   slug VARCHAR(32) NOT NULL UNIQUE,
@@ -46,15 +46,16 @@ CREATE TABLE IF NOT EXISTS activities (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- UI name: 活動. One event at a QR point, live while starts_at <= now < ends_at.
+-- Events at the same QR point never overlap.
 CREATE TABLE IF NOT EXISTS rounds (
   id INT AUTO_INCREMENT PRIMARY KEY,
   activity_id INT NOT NULL,
   name VARCHAR(100) NOT NULL,
-  is_open BOOLEAN NOT NULL DEFAULT TRUE,
-  starts_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  ends_at DATETIME NULL,
+  starts_at DATETIME NOT NULL,
+  ends_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_rounds_activity (activity_id, is_open),
+  INDEX idx_rounds_time (activity_id, starts_at, ends_at),
   FOREIGN KEY (activity_id) REFERENCES activities(id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

@@ -39,3 +39,17 @@ export const fmtTime = (t) => (t ? new Date(t).toLocaleString('zh-TW', { hour12:
 
 // Only allow same-site relative redirects (blocks ?next=https://evil.example).
 export const safeNext = (next, fallback = '/') => (next && next.startsWith('/') && !next.startsWith('//') ? next : fallback);
+
+export const ROUND_STATUS = { ongoing: '進行中', upcoming: '未開始', ended: '已結束' };
+
+// <input type="datetime-local"> works in the browser's local time (Taiwan for admins).
+const pad = (n) => String(n).padStart(2, '0');
+export function toLocalInput(t) {
+  if (!t) return '';
+  const d = new Date(t);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+export const fromLocalInput = (v) => (v ? new Date(v).toISOString() : '');
+
+const fmtShort = (t) => new Date(t).toLocaleString('zh-TW', { hour12: false, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+export const fmtRange = (a, b) => `${fmtShort(a)} – ${fmtShort(b)}`;

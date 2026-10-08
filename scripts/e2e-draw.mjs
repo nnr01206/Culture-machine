@@ -34,9 +34,32 @@ async function login(email) {
 for (const t of ['draws', 'capsules', 'rounds', 'activities', 'sessions', 'login_codes', 'users']) await db.query(`DELETE FROM ${t}`);
 
 const admin = await login('admin@test.com');
-const { data: act } = await admin('/admin/activities', 'POST', { name: 'E2E', organizer_name: '主辦方', organizer_contact: 'LINE @org' });
-const slug = act.slug;
-const { data: round } = await admin(`/admin/activities/${act.id}/rounds`, 'POST', { name: '測試輪' });
+const hours = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+const point = { name: '街角書店', organizer_name: '主辦方', organizer_contact: 'LINE @org' };
+
+// --- QR points and events (UI: QR 點位 / 活動)
+const created = await admin('/admin/rounds', 'POST', { name: '秋季交換', starts_at: hours(-1), ends_at: hours(24), point });
+check(created.status === 201, 'event created together with a new QR point');
+const round = (await admin(`/admin/rounds/${created.data.id}`)).data;
+const slug = round.point_slug;
+check(/^[a-z0-9]{4}-[a-z0-9]{5}$/.test(slug || ''), 'QR id generated automatically');
+check(round.status === 'ongoing' && round.point_organizer_contact === 'LINE @org', 'event detail has status and QR point info');
+const act = (await admin('/admin/activities')).data.find((a) => a.slug === slug);
+check(act.current_round?.name === '秋季交換', 'QR point leads to the live event');
+check((await admin('/admin/activities', 'POST', { ...point, slug: 'bookstore' })).data?.slug !== 'bookstore', 'custom QR id ignored');
+
+check((await admin('/admin/rounds', 'POST', { name: 'x', activity_id: act.id, starts_at: hours(2), ends_at: hours(1) })).status === 400, 'event end before start rejected');
+check((await admin('/admin/rounds', 'POST', { name: 'x', activity_id: act.id, starts_at: hours(1), ends_at: hours(2) })).status === 409, 'overlapping event at same QR point rejected');
+check((await admin('/admin/rounds', 'POST', { name: '別處', starts_at: hours(1), ends_at: hours(2), point: { ...point, name: '論壇' } })).status === 201, 'same time at a different QR point is fine');
+check((await admin(`/admin/rounds/${round.id}`, 'PATCH', { starts_at: hours(0) })).status === 409, 'started event keeps its start time');
+check((await admin(`/admin/rounds/${round.id}`, 'PATCH', { ends_at: hours(30) })).status === 200, 'ongoing event extended');
+check((await admin(`/admin/rounds/${round.id}`, 'PATCH', { name: '秋季交換', point: { ...point, organizer_contact: 'LINE @org2' } })).status === 200
+  && (await admin(`/admin/rounds/${round.id}`)).data.point_organizer_contact === 'LINE @org2', 'event and QR point edited together');
+check((await admin(`/admin/rounds/${round.id}`, 'PATCH', { name: '改不到', point: { ...point, organizer_contact: '' } })).status === 400
+  && (await admin(`/admin/rounds/${round.id}`)).data.name === '秋季交換', 'invalid point edit rolls back the event edit too');
+const future = await admin('/admin/rounds', 'POST', { name: '冬季交換', activity_id: act.id, starts_at: hours(31), ends_at: hours(40) });
+check(future.status === 201, 'next event scheduled at the same QR point');
+check((await admin(`/admin/rounds/${future.data.id}`, 'DELETE')).status === 204, 'empty future event deleted');
 
 const capsule = (title) => ({ title, category: 'skill', description: `${title} 的說明`, duration: '1h' });
 
@@ -112,6 +135,7 @@ await admin(`/admin/rounds/${round.id}/end`, 'POST');
 check((await a(`/activities/${slug}/capsules`, 'POST', capsule('late'))).status === 409, 'cannot drop after round ends');
 const meAfter = (await b(`/activities/${slug}/me`)).data;
 check(meAfter.round === null && meAfter.myDraws.length === 1, 'after round ends, drawn capsules still visible');
+check((await admin(`/admin/rounds/${round.id}`, 'DELETE')).status === 409, 'round with capsules cannot be deleted');
 
 await db.end();
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');

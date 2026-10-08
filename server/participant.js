@@ -3,6 +3,7 @@ import { pool, tx } from './db.js';
 import { sendMail } from './mail.js';
 import { CATEGORIES, DURATIONS } from './config.js';
 import { HttpError } from './errors.js';
+import { currentRound } from './rounds.js';
 
 export const participantRouter = Router();
 
@@ -33,9 +34,8 @@ async function requireProfile(req, res, next) {
 
 async function getActivity(slug) {
   const [[activity]] = await pool.query('SELECT * FROM activities WHERE slug = ?', [slug]);
-  if (!activity) throw new HttpError(404, '找不到這個活動');
-  const [[round]] = await pool.query('SELECT * FROM rounds WHERE activity_id = ? AND is_open = TRUE', [activity.id]);
-  return { activity, round: round || null };
+  if (!activity) throw new HttpError(404, '找不到這個 QR Code 對應的地點');
+  return { activity, round: await currentRound(activity.id) };
 }
 
 // Contact details shown only after a draw (decisions 2, 15).
@@ -136,7 +136,7 @@ participantRouter.get('/activities/:slug/me', requireParticipant, requireProfile
 
   res.json({
     profile: contactOf(req.user),
-    round: round ? { id: round.id, name: round.name } : null,
+    round: round ? { id: round.id, name: round.name, starts_at: round.starts_at, ends_at: round.ends_at } : null,
     credits,
     myCapsules: mine.map((c) => ({
       ...c,
@@ -156,7 +156,7 @@ participantRouter.get('/activities/:slug/me', requireParticipant, requireProfile
 
 participantRouter.post('/activities/:slug/capsules', requireParticipant, requireProfile, async (req, res) => {
   const { activity, round } = await getActivity(req.params.slug);
-  if (!round) throw new HttpError(409, '本輪已結束，下一輪開始後再來投入');
+  if (!round) throw new HttpError(409, '目前沒有進行中的活動，下一場活動開始後再來投入');
 
   const b = req.body || {};
   const category = str(b.category);
@@ -176,7 +176,7 @@ participantRouter.post('/activities/:slug/capsules', requireParticipant, require
         "SELECT COUNT(*) AS n FROM capsules WHERE user_id = ? AND round_id = ? AND status <> 'removed'",
         [req.user.id, round.id],
       );
-      if (n >= activity.per_user_limit) throw new HttpError(409, `這一輪每人最多投入 ${activity.per_user_limit} 顆`);
+      if (n >= activity.per_user_limit) throw new HttpError(409, `這場活動每人最多投入 ${activity.per_user_limit} 顆`);
     }
     const [r] = await conn.query(
       `INSERT INTO capsules (round_id, user_id, category, title, description, duration, conditions)
@@ -227,7 +227,7 @@ async function txWithRetry(fn, attempts = 3) {
 
 participantRouter.post('/activities/:slug/draw', requireParticipant, requireProfile, async (req, res) => {
   const { activity, round } = await getActivity(req.params.slug);
-  if (!round) throw new HttpError(409, '本輪已結束，不能再抽了');
+  if (!round) throw new HttpError(409, '目前沒有進行中的活動，不能抽了');
 
   const result = await txWithRetry(async (conn) => {
     // Lock the drawer so two taps can't both spend the same credit.
