@@ -200,3 +200,108 @@ pre { background: var(--orange-tint); padding: 12px; border-radius: 8px; overflo
   .phase-spinning .knob, .phase-spinning .globe, .phase-spinning .globe-capsule, .phase-ready .prize, .tap-hint { animation: none; }
   .phase-dropping .prize { animation-duration: .01s; }
 }
+
+/* ---- Admin: events & QR points ---- */
+.page-head { margin-top: 8px; }
+.page-head h2 { margin: 0; }
+.section-title { color: var(--muted); font-size: .9rem; font-weight: 700; margin: 24px 0 8px; }
+.event-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.event-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name side" "meta side"; gap: 2px 12px; align-items: center;
+  padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--radius); text-decoration: none; color: inherit; background: #fff; }
+.event-row:hover { border-color: var(--orange); }
+.event-name { grid-area: name; font-weight: 700; }
+.event-meta { grid-area: meta; font-size: .85rem; color: var(--muted); }
+.event-side { grid-area: side; display: flex; gap: 10px; align-items: center; }
+.status-ongoing { background: var(--orange); color: #fff; }
+.status-upcoming { border-style: dashed; }
+.status-ended { border-color: var(--muted); color: var(--muted); }
+.event-header .row h2 { margin-right: 4px; }
+.event-meta-line { font-size: 1.05rem; margin: 8px 0 4px; }
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; background: var(--orange-tint); border-radius: 8px; color: var(--orange-dark); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .grid-2 { grid-template-columns: 1fr; } }
+.subform { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 4px 14px 14px; margin: 12px 0 0; }
+.subform legend { color: var(--orange); font-weight: 700; padding: 0 6px; }
+.next-event { font-size: 1.2rem; margin: 6px 0; color: var(--orange); }
+
+.event-card-body { display: flex; gap: 20px; align-items: flex-start; }
+.event-card-qr { flex: none; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.event-card-qr img { width: 150px; height: 150px; border: 2px solid var(--orange); border-radius: 8px; }
+.event-card-info { flex: 1; min-width: 0; }
+.event-card-info label:first-child { margin-top: 0; }
+.event-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: .9rem; }
+.event-facts dt { color: var(--muted); }
+.event-facts dd { margin: 0; word-break: break-all; }
+.event-card-note { margin: 14px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); }
+@media (max-width: 600px) {
+  .event-card-body { flex-direction: column; }
+  .event-card-qr { flex-direction: row; align-self: stretch; }
+  .event-card-qr img { width: 110px; height: 110px; }
+}
+
+/* ---- Profile balloon (fixed top-right on participant pages) ---- */
+.balloon { position: fixed; z-index: 50;
+  /* Line up with the right edge of the centered .page column (max-width 560px, 16px padding), not the window corner. */
+  top: max(14px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right), calc((100vw - 560px) / 2 + 12px)); display: flex; align-items: flex-start; text-decoration: none; color: var(--ink); }
+.balloon-figure { position: relative; flex: none; padding: 0; border: 0; background: none; cursor: pointer; }
+.balloon-figure:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 8px; }
+.balloon.menu-open .balloon-badge { transform: rotate(60deg); }
+.balloon-badge { transition: transform .3s; }
+.balloon-menu { position: absolute; right: 0; top: 66px; min-width: 168px; padding: 6px; background: #fff; border: 2px solid var(--orange);
+  border-radius: 14px; box-shadow: 0 6px 18px rgba(184, 68, 28, .18); display: grid; gap: 2px; animation: menu-in .18s ease-out; }
+.balloon-menu a, .balloon-menu button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  font: inherit; font-size: .95rem; color: var(--ink); text-decoration: none; background: none; border: 0; cursor: pointer; text-align: left; }
+.balloon-menu a:hover, .balloon-menu button:hover, .balloon-menu a:focus-visible, .balloon-menu button:focus-visible { background: var(--orange-tint); outline: none; }
+.balloon-menu svg { color: var(--orange); flex: none; }
+.balloon-menu button { border-top: 1px dashed var(--line); border-radius: 0 0 10px 10px; color: var(--muted); }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.balloon-svg { display: block; animation: balloon-float 4s ease-in-out infinite; transform-origin: 50% 20%; filter: drop-shadow(0 2px 3px rgba(184, 68, 28, .25)); }
+/* Pencil badge: says "edit" without words. */
+.balloon-badge { position: absolute; left: 27px; top: 28px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; color: var(--orange); border: 2px solid var(--orange); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+/* Greeting: hidden by default; pops out on first visits (.greeting) and on hover/focus. */
+.balloon-bubble { position: absolute; right: 48px; top: 8px; white-space: nowrap; width: max-content; max-width: min(15em, calc(100vw - 80px)); background: #fff; border: 2px solid var(--orange); border-radius: 14px;
+  padding: 5px 10px; line-height: 1.3; box-shadow: 0 2px 8px rgba(184, 68, 28, .15); font: inherit; text-align: left; cursor: pointer; color: var(--ink);
+  opacity: 0; transform: translateX(8px) scale(.9); transform-origin: right center; pointer-events: none; transition: opacity .3s, transform .3s; }
+.balloon-bubble::after { content: ''; position: absolute; right: -8px; top: 12px; border: 6px solid transparent; border-left-color: var(--orange); border-right: 0; }
+.balloon-bubble b { display: block; color: var(--orange); font-size: .9rem; max-width: 8em; overflow: hidden; text-overflow: ellipsis; }
+.balloon-bubble span { display: block; font-size: .72rem; color: var(--muted); }
+.balloon.speaking .balloon-bubble,
+.balloon:hover .balloon-bubble,
+.balloon:focus-within .balloon-bubble { opacity: 1; transform: none; pointer-events: auto; }
+.balloon-bubble .balloon-line { white-space: normal; font-size: .88rem; max-width: none; }
+.balloon.speaking .balloon-svg { animation: balloon-float 4s ease-in-out infinite, balloon-hop .5s ease-out; }
+@keyframes balloon-hop { 40% { translate: 0 -8px; } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@keyframes balloon-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .balloon-svg { animation: none; } .balloon-bubble { transition: none; } }
+/* Keep the brand title clear of the balloon. */
+.brand-header { padding-right: 56px; }
+
+/* ---- Home: my events ---- */
+.my-event { border: 2px solid var(--orange); border-radius: var(--radius); margin-bottom: 14px; background: #fff; }
+.my-event summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; gap: 4px; }
+.my-event summary::-webkit-details-marker { display: none; }
+.my-event summary::after { content: '展開 ▾'; justify-self: end; margin-top: -1.4em; font-size: .78rem; color: var(--orange); }
+.my-event[open] summary::after { content: '收起 ▴'; }
+.my-event-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-right: 3.5em; }
+.my-event-body { padding: 0 16px 6px; border-top: 1px dashed var(--line); }
+.my-event-body .capsule-card { border-width: 1.5px; }
+.my-event-cta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; padding: 10px 12px; background: var(--orange-tint); border-radius: 10px; }
+.my-event-cta b { color: var(--orange); font-size: 1.2rem; }
+.records-title { color: var(--orange); }
+h3.records-title { margin: 16px 0 4px; }
+
+/* With the menu open, the bubble stays hidden even though the balloon has focus/hover. */
+.balloon.menu-open .balloon-bubble { opacity: 0; pointer-events: none; }
+
+/* ---- Home: recently opened QR points ---- */
+.recent { margin-bottom: 8px; }
+.recent h2 { margin-top: 4px; }
+.recent-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; border: 1.5px solid var(--line);
+  border-radius: var(--radius); text-decoration: none; color: inherit; background: #fff; }
+.recent-row:hover { border-color: var(--orange); }
+.recent-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.recent-info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

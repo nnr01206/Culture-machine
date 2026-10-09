@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { categoryLabel, durationLabel } from './api.js';
+import { categoryLabel, durationLabel, fmtTime, CAPSULE_STATUS } from './api.js';
 import { CategoryIcon, HalfCapsule } from './icons.jsx';
 
 export function Brand({ subtitle }) {
@@ -23,7 +23,7 @@ export function HowItWorks() {
     ['投入資源', '準備一份「可控、可完成、可收穫」的輕量資源，5 小時內可以完成的小小分享。'],
     ['抽出扭蛋', '投入一顆，就能轉一次扭蛋機，隨機抽到另一位參與者的扭蛋。'],
     ['交換合作', '抽到後聯絡蛋友，一起討論怎麼交換。前提只有：自主、知情、雙方同意。'],
-    ['每季派對', '每一輪跟著活動進行，結束後再開新的一輪。'],
+    ['每季派對', '每場活動有開始和結束的時間，結束後，下一場活動再見。'],
   ];
   return (
     <ol className="steps">
@@ -78,4 +78,38 @@ export function ContactBlock({ person, label }) {
 
 export function Loading() {
   return <main className="page"><p className="muted">載入中…</p></main>;
+}
+
+// "我抽到的 / 我投入的" lists, shared by an activity page and the home page.
+export function MyRecords({ draws, capsules, headingLevel: H = 'h2', showRound = true }) {
+  return (
+    <>
+      {draws.length > 0 && (
+        <section>
+          <H className="records-title">我抽到的扭蛋</H>
+          <p className="muted small">聯絡蛋友，一起討論怎麼交換。前提只有：自主、知情、雙方同意。</p>
+          {draws.map((d) => (
+            <CapsuleCard key={d.draw_id} capsule={d.capsule} provider={d.provider}>
+              <p className="muted small">{showRound && `${d.round_name}・`}{fmtTime(d.drawn_at)} 抽到</p>
+            </CapsuleCard>
+          ))}
+        </section>
+      )}
+      {capsules.length > 0 && (
+        <section>
+          <H className="records-title">我投入的扭蛋</H>
+          {capsules.map((c) => (
+            <CapsuleCard key={c.id} capsule={c}>
+              <p className="small">
+                <span className={`tag ${c.status === 'drawn' ? 'tag-solid' : c.status === 'removed' ? 'tag-muted' : ''}`}>{CAPSULE_STATUS[c.status]}</span>
+                {showRound && <span className="muted">　{c.round_name}</span>}
+              </p>
+              {c.drawnBy.map((p, i) => <ContactBlock key={i} person={p} label="抽到的蛋友" />)}
+              {c.status === 'removed' && <p className="muted small">這顆扭蛋已被主辦方下架，有疑問請聯絡主辦方。</p>}
+            </CapsuleCard>
+          ))}
+        </section>
+      )}
+    </>
+  );
 }

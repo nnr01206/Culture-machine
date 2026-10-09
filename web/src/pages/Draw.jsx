@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useBalloon } from '../balloon.jsx';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -23,6 +24,16 @@ export default function Draw() {
   const [credits, setCredits] = useState(null);
   const [result, setResult] = useState(null);
   const [message, setMessage] = useState('');
+  const { say, setBusy } = useBalloon();
+
+  // Keep the balloon quiet from the spin until the capsule is opened, then nudge toward saying hi.
+  useEffect(() => {
+    setBusy(['spinning', 'dropping', 'ready', 'opening'].includes(phase));
+    if (phase !== 'revealed') return;
+    const t = setTimeout(() => say('drawn', '記得跟蛋友打聲招呼喔'), 1500);
+    return () => clearTimeout(t);
+  }, [phase, say, setBusy]);
+  useEffect(() => () => setBusy(false), [setBusy]);
 
   useEffect(() => {
     if (user === null) { navigate(`/login?next=${encodeURIComponent(`/activity/draw?id=${slug}`)}`, { replace: true }); return; }
@@ -30,7 +41,7 @@ export default function Draw() {
     if (!user.profile) { navigate(back, { replace: true }); return; }
     api(`/activities/${encodeURIComponent(slug)}/me`)
       .then((me) => {
-        if (!me.round) setMessage('本輪已結束，不能再抽了。');
+        if (!me.round) setMessage('目前沒有進行中的活動，不能抽了。');
         setCredits(me.round ? me.credits : 0);
       })
       .catch((e) => setMessage(e.message));
@@ -51,7 +62,8 @@ export default function Draw() {
     if (!outcome.ok) {
       setPhase('idle');
       setMessage(outcome.err.message);
-      if (outcome.err.code !== 'EMPTY') setCredits(0); // e.g. no credits / round ended
+      if (outcome.err.code === 'EMPTY') say('empty', '等等再來，可能就有新的蛋了');
+      else setCredits(0); // e.g. no credits / round ended
       return;
     }
     setResult(outcome.r);

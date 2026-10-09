@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
-import { api, CATEGORIES, CAPSULE_STATUS, fmtTime } from '../api.js';
+import { useBalloon } from '../balloon.jsx';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
+import { api, CATEGORIES, fmtTime, fmtRange } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Brand, CapsuleCard, ContactBlock, Footer, HowItWorks, Loading } from '../components.jsx';
+import { Brand, Footer, HowItWorks, Loading, MyRecords } from '../components.jsx';
 import { CategoryIcon } from '../icons.jsx';
+import { rememberPoint } from '../recent.js';
 
 // Landing page behind each activity's QR code, and the participant's home within the activity.
 export default function Activity() {
@@ -18,7 +20,9 @@ export default function Activity() {
 
   useEffect(() => {
     if (!slug) { setError('網址缺少活動代碼，請重新掃描 QR Code'); return; }
-    api(`/activities/${encodeURIComponent(slug)}`).then(setPub).catch((e) => setError(e.message));
+    api(`/activities/${encodeURIComponent(slug)}`)
+      .then((data) => { setPub(data); rememberPoint(data.activity.slug, data.activity.name); })
+      .catch((e) => setError(e.message));
   }, [slug]);
 
   useEffect(() => {
@@ -30,14 +34,22 @@ export default function Activity() {
   if (error) return <main className="page"><Brand /><div className="card"><p className="error">{error}</p></div></main>;
   if (!pub || user === undefined) return <Loading />;
 
-  const { activity, round, pool } = pub;
+  const { activity, round, nextRound, pool } = pub;
 
   return (
     <main className="page">
       <Brand subtitle={activity.name} />
 
       {round ? <PoolCard round={round} pool={pool} /> : (
-        <div className="card"><p style={{ margin: 0 }}><b>本輪已結束</b>，下一輪即將開始。</p></div>
+        <div className="card center">
+          {nextRound ? (
+            <>
+              <p style={{ margin: 0 }}>下一場活動</p>
+              <p className="next-event"><b>{nextRound.name}</b></p>
+              <p className="muted" style={{ margin: 0 }}>{fmtRange(nextRound.starts_at, nextRound.ends_at)}</p>
+            </>
+          ) : <p style={{ margin: 0 }}>目前沒有進行中的活動，下次活動見！</p>}
+        </div>
       )}
 
       {user === null && (
@@ -65,7 +77,8 @@ export default function Activity() {
 function PoolCard({ round, pool }) {
   return (
     <section className="card pool-card">
-      <p className="muted" style={{ margin: 0 }}>{round.name}・進行中</p>
+      <p style={{ margin: 0 }}><b>{round.name}</b></p>
+      <p className="muted small" style={{ margin: '2px 0 0' }}>進行到 {fmtTime(round.ends_at)}</p>
       <p className="pool-total">池子裡有 <b>{pool.total}</b> 顆扭蛋</p>
       <div className="pool-cats">
         {CATEGORIES.filter((c) => pool.byCategory[c.key] > 0).map((c) => (
@@ -76,12 +89,36 @@ function PoolCard({ round, pool }) {
   );
 }
 
+const IDLE_MS = 20000;
+const ENDING_MS = 60 * 60e3;
+
 function ParticipantHome({ slug, round, me }) {
   const q = `?id=${encodeURIComponent(slug)}`;
+  const { say } = useBalloon();
+  const location = useLocation();
+  const credits = round ? me.credits : 0;
+
+  // Balloon lines for this page; the balloon's own rules decide whether they're actually said.
+  useEffect(() => {
+    if (location.state?.justDropped) say('dropped', '放進去囉！去轉一顆吧');
+    if (credits > 0 && new Date(round.ends_at) - Date.now() < ENDING_MS) say('ending', '活動快結束了，別忘了轉');
+  }, [location.state, credits, round, say]);
+
+  useEffect(() => {
+    if (credits <= 0) return;
+    let timer;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => say('idle', `你還有 ${credits} 次可以轉喔`), IDLE_MS);
+    };
+    const events = ['pointerdown', 'keydown', 'scroll'];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, reset)); };
+  }, [credits, say]);
   const hasCapsules = me.myCapsules.length > 0;
   return (
     <>
-      <p className="hello">嗨，{me.profile.nickname}！ <Link to={`/profile?next=${encodeURIComponent(`/activity${q}`)}`} className="small-link">編輯資料</Link></p>
 
       {round && (
         <section className="card action-card">
@@ -100,33 +137,7 @@ function ParticipantHome({ slug, round, me }) {
         <section className="card-soft"><HowItWorks /></section>
       )}
 
-      {me.myDraws.length > 0 && (
-        <section>
-          <h2>我抽到的扭蛋</h2>
-          <p className="muted">聯絡蛋友，一起討論怎麼交換。前提只有：自主、知情、雙方同意。</p>
-          {me.myDraws.map((d) => (
-            <CapsuleCard key={d.draw_id} capsule={d.capsule} provider={d.provider}>
-              <p className="muted small">{d.round_name}・{fmtTime(d.drawn_at)} 抽到</p>
-            </CapsuleCard>
-          ))}
-        </section>
-      )}
-
-      {hasCapsules && (
-        <section>
-          <h2>我投入的扭蛋</h2>
-          {me.myCapsules.map((c) => (
-            <CapsuleCard key={c.id} capsule={c}>
-              <p className="small">
-                <span className={`tag ${c.status === 'drawn' ? 'tag-solid' : c.status === 'removed' ? 'tag-muted' : ''}`}>{CAPSULE_STATUS[c.status]}</span>
-                <span className="muted">　{c.round_name}</span>
-              </p>
-              {c.drawnBy.map((p, i) => <ContactBlock key={i} person={p} label="抽到的蛋友" />)}
-              {c.status === 'removed' && <p className="muted small">這顆扭蛋已被主辦方下架，有疑問請聯絡主辦方。</p>}
-            </CapsuleCard>
-          ))}
-        </section>
-      )}
+      <MyRecords draws={me.myDraws} capsules={me.myCapsules} />
     </>
   );
 }

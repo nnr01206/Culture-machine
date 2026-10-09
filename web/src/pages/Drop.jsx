@@ -57,7 +57,7 @@ export default function Drop() {
           <h2 style={{ marginTop: 12 }}>你的扭蛋已經放進機器了！</h2>
           <p>你現在有 <b className="big-num">{credits}</b> 次抽取資格。</p>
           <Link className="btn btn-block btn-big" to={`/activity/draw?id=${encodeURIComponent(slug)}`}>去轉扭蛋機</Link>
-          <Link className="btn btn-block btn-ghost" to={back}>回活動頁</Link>
+          <Link className="btn btn-block btn-ghost" to={back} state={{ justDropped: true }}>回活動頁</Link>
         </div>
       </main>
     );
