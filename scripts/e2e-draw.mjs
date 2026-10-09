@@ -130,6 +130,14 @@ const [[neg]] = await db.query(`SELECT COUNT(*) AS n FROM users u WHERE
   (SELECT COUNT(*) FROM draws WHERE drawer_id = u.id) > (SELECT COUNT(*) FROM capsules WHERE user_id = u.id AND status <> 'removed')`);
 check(Number(neg.n) === 0, 'nobody drew more times than they dropped');
 
+// --- home page: events I took part in, across QR points
+const evB = (await b('/me/events')).data.events;
+check(evB.length === 1 && evB[0].name === '秋季交換' && evB[0].status === 'ongoing', 'home lists the events I joined');
+check(evB[0].myDraws[0]?.provider.line_id === 'a-line' && evB[0].myCapsules[0]?.drawnBy[0]?.nickname === 'A', 'home shows drawn capsules with contacts and who drew mine');
+const fresh = await login('fresh@test.com');
+await fresh('/me/profile', 'PUT', { nickname: 'F', region: '台東', line_id: 'f', consent: true });
+check((await fresh('/me/events')).data.events.length === 0, 'home is empty for someone who has not joined');
+
 // --- round closed
 await admin(`/admin/rounds/${round.id}/end`, 'POST');
 check((await a(`/activities/${slug}/capsules`, 'POST', capsule('late'))).status === 409, 'cannot drop after round ends');

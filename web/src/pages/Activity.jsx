@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useBalloon } from '../balloon.jsx';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { api, CATEGORIES, CAPSULE_STATUS, fmtTime, fmtRange } from '../api.js';
+import { api, CATEGORIES, fmtTime, fmtRange } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Brand, CapsuleCard, ContactBlock, Footer, HowItWorks, Loading } from '../components.jsx';
+import { Brand, Footer, HowItWorks, Loading, MyRecords } from '../components.jsx';
 import { CategoryIcon } from '../icons.jsx';
+import { rememberPoint } from '../recent.js';
 
 // Landing page behind each activity's QR code, and the participant's home within the activity.
 export default function Activity() {
@@ -19,7 +20,9 @@ export default function Activity() {
 
   useEffect(() => {
     if (!slug) { setError('網址缺少活動代碼，請重新掃描 QR Code'); return; }
-    api(`/activities/${encodeURIComponent(slug)}`).then(setPub).catch((e) => setError(e.message));
+    api(`/activities/${encodeURIComponent(slug)}`)
+      .then((data) => { setPub(data); rememberPoint(data.activity.slug, data.activity.name); })
+      .catch((e) => setError(e.message));
   }, [slug]);
 
   useEffect(() => {
@@ -134,33 +137,7 @@ function ParticipantHome({ slug, round, me }) {
         <section className="card-soft"><HowItWorks /></section>
       )}
 
-      {me.myDraws.length > 0 && (
-        <section>
-          <h2>我抽到的扭蛋</h2>
-          <p className="muted">聯絡蛋友，一起討論怎麼交換。前提只有：自主、知情、雙方同意。</p>
-          {me.myDraws.map((d) => (
-            <CapsuleCard key={d.draw_id} capsule={d.capsule} provider={d.provider}>
-              <p className="muted small">{d.round_name}・{fmtTime(d.drawn_at)} 抽到</p>
-            </CapsuleCard>
-          ))}
-        </section>
-      )}
-
-      {hasCapsules && (
-        <section>
-          <h2>我投入的扭蛋</h2>
-          {me.myCapsules.map((c) => (
-            <CapsuleCard key={c.id} capsule={c}>
-              <p className="small">
-                <span className={`tag ${c.status === 'drawn' ? 'tag-solid' : c.status === 'removed' ? 'tag-muted' : ''}`}>{CAPSULE_STATUS[c.status]}</span>
-                <span className="muted">　{c.round_name}</span>
-              </p>
-              {c.drawnBy.map((p, i) => <ContactBlock key={i} person={p} label="抽到的蛋友" />)}
-              {c.status === 'removed' && <p className="muted small">這顆扭蛋已被主辦方下架，有疑問請聯絡主辦方。</p>}
-            </CapsuleCard>
-          ))}
-        </section>
-      )}
+      <MyRecords draws={me.myDraws} capsules={me.myCapsules} />
     </>
   );
 }

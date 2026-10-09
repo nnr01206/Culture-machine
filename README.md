@@ -99,6 +99,9 @@ node scripts/e2e-draw.mjs
 
 更新程式：本機 build，上傳覆蓋 `server/`、`public/`、`app.js`、`server.cjs`，在 Setup Node.js App 按 Restart。有改 `package.json` 才需要再按 Run NPM Install。
 
+rm -f ../culture.machine-deploy.zip
+zip -rq ../culture.machine-deploy.zip server.cjs app.js package.json server public -x "*.DS_Store"
+
 ### 主機上的環境變數
 
 | 變數 | 填什麼 | 從哪裡來 |

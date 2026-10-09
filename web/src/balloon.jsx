@@ -117,43 +117,83 @@ export function BalloonProvider({ children }) {
   return (
     <BalloonContext.Provider value={api}>
       {children}
-      {visible && <Balloon nickname={nickname} line={line} onDismiss={dismiss} to={`/profile?next=${encodeURIComponent(pathname + search)}`} />}
+      {visible && <Balloon key={pathname + search} nickname={nickname} line={line} onDismiss={dismiss} profileTo={`/profile?next=${encodeURIComponent(pathname + search)}`} />}
     </BalloonContext.Provider>
   );
 }
 
-function Balloon({ nickname, line, onDismiss, to }) {
+// Keyed by path in the provider, so the menu closes whenever the page changes.
+function Balloon({ nickname, line, onDismiss, profileTo }) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
   const isGreeting = !line || line.id === 'greet';
-  // The greeting invites you to edit your profile; any other line is just dismissed on tap.
-  const onBubble = () => (isGreeting ? navigate(to) : onDismiss());
+
+  const toggle = () => { onDismiss(); setOpen((o) => !o); };
+  // The greeting invites you to open the menu; any other line is just dismissed on tap.
+  const onBubble = () => (isGreeting ? toggle() : onDismiss());
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const doLogout = async () => {
+    setOpen(false);
+    await logout();
+    navigate('/');
+  };
 
   return (
-    <div className={`balloon ${line ? 'speaking' : ''}`}>
+    <div ref={rootRef} className={`balloon ${line && !open ? 'speaking' : ''} ${open ? 'menu-open' : ''}`}>
       <button type="button" className="balloon-bubble" onClick={onBubble} tabIndex={line ? 0 : -1}>
         {isGreeting
-          ? <><b>嗨，{nickname}！</b><span>點我編輯資料</span></>
+          ? <><b>嗨，{nickname}！</b><span>點我打開選單</span></>
           : <b className="balloon-line">{line.text}</b>}
       </button>
-      <Link to={to} className="balloon-figure" aria-label={`嗨，${nickname}！編輯個人資料`}>
-        <svg className="balloon-svg" width="40" height="66" viewBox="0 0 46 76" aria-hidden="true">
-          <path d="M23 48c-2 6 4 9 0 15s3 9 1 12" fill="none" stroke="var(--orange)" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M23 2C11 2 3 11 3 22c0 13 11 24 20 26 9-2 20-13 20-26C43 11 35 2 23 2z" fill="var(--orange)" />
-          <path d="M20 48l3 4 3-4z" fill="var(--orange-dark)" />
-          <ellipse cx="13" cy="13" rx="3.5" ry="6" fill="#fff" opacity=".45" transform="rotate(25 13 13)" />
-          <circle cx="17" cy="23" r="2" fill="#fff" />
-          <circle cx="29" cy="23" r="2" fill="#fff" />
-          <path d="M18.5 29q4.5 4 9 0" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="13.5" cy="28" r="2.2" fill="#f4a582" opacity=".7" />
-          <circle cx="32.5" cy="28" r="2.2" fill="#f4a582" opacity=".7" />
+      <button type="button" className="balloon-figure" onClick={toggle}
+        aria-haspopup="menu" aria-expanded={open} aria-label={`嗨，${nickname}！打開選單`}>
+        {/* Hot-air balloon: orange envelope with white seams and a cute face, ropes, basket. */}
+        <svg className="balloon-svg" width="40" height="61" viewBox="0 0 46 70" aria-hidden="true">
+          <path d="M23 2C10 2 3 12 3 23c0 10 8 17 12 23h16c4-6 12-13 12-23C43 12 36 2 23 2z" fill="var(--orange)" />
+          <path d="M23 2.5c-7 6-10 15-10 23 0 8 2 14 4 20.5M23 2.5c7 6 10 15 10 23 0 8-2 14-4 20.5" fill="none" stroke="#fff" strokeWidth="1.4" opacity=".55" />
+          <ellipse cx="12" cy="13" rx="2.6" ry="5" fill="#fff" opacity=".4" transform="rotate(25 12 13)" />
+          <circle cx="18" cy="22" r="2" fill="#fff" />
+          <circle cx="28" cy="22" r="2" fill="#fff" />
+          <path d="M19.5 28q3.5 3.2 7 0" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="14" cy="27" r="2.2" fill="#f4a582" opacity=".75" />
+          <circle cx="32" cy="27" r="2.2" fill="#f4a582" opacity=".75" />
+          <rect x="14.5" y="45" width="17" height="4" rx="1.5" fill="var(--orange-dark)" />
+          <path d="M16.5 49l2.5 8M29.5 49l-2.5 8" stroke="var(--orange-dark)" strokeWidth="1.3" strokeLinecap="round" />
+          <rect x="16.5" y="57" width="13" height="10" rx="2.5" fill="var(--orange-dark)" />
+          <path d="M16.5 61.5h13M21 57v10M25 57v10" stroke="#fff" strokeWidth=".9" opacity=".35" />
         </svg>
         <span className="balloon-badge" aria-hidden="true">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 20l4-1L19 8l-3-3L5 16l-1 4z" />
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </span>
-      </Link>
+      </button>
+      {open && (
+        <div className="balloon-menu" role="menu">
+          <Link role="menuitem" to="/" onClick={() => setOpen(false)}><MenuIcon d="M3.5 11L12 4l8.5 7M6 9.5V20h12V9.5" />回首頁</Link>
+          <Link role="menuitem" to={profileTo} onClick={() => setOpen(false)}><MenuIcon d="M4 20l4-1L19 8l-3-3L5 16l-1 4z" />編輯個人資料</Link>
+          <button type="button" role="menuitem" onClick={doLogout}><MenuIcon d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10" />登出</button>
+        </div>
+      )}
       {line && <span className="visually-hidden" role="status">{isGreeting ? `嗨，${nickname}！` : line.text}</span>}
     </div>
   );
 }
+
+const MenuIcon = ({ d }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
