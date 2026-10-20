@@ -115,7 +115,7 @@ function Capsules({ roundId, version, onChanged }) {
                   </td>
                   <td>{categoryLabel(c.category)}</td>
                   <td>{durationLabel(c.duration)}</td>
-                  <td>{c.user_id ? <>{c.nickname}<div className="muted">{c.email}</div></> : <span className="tag">主辦方</span>}</td>
+                  <td>{c.user_id ? <>{c.nickname}<div className="muted">{c.email || 'LINE 登入'}</div></> : <span className="tag">主辦方</span>}</td>
                   <td>{c.draw_count} / {c.max_draws}</td>
                   <td><span className={`tag ${c.status === 'removed' ? 'tag-muted' : ''}`}>{CAPSULE_STATUS[c.status]}</span></td>
                   <td>
@@ -143,7 +143,7 @@ function Participants({ roundId, version }) {
         <thead><tr><th>暱稱</th><th>Email</th><th>地區</th><th>投了幾顆</th><th>抽了幾次</th></tr></thead>
         <tbody>
           {data.map((u) => (
-            <tr key={u.id}><td>{u.nickname}</td><td>{u.email}</td><td>{u.region}</td><td>{u.capsule_count}</td><td>{u.draw_count}</td></tr>
+            <tr key={u.id}><td>{u.nickname}</td><td>{u.email || <span className="muted">LINE 登入</span>}</td><td>{u.region}</td><td>{u.capsule_count}</td><td>{u.draw_count}</td></tr>
           ))}
         </tbody>
       </table>
@@ -164,7 +164,7 @@ function Draws({ roundId, version }) {
           {data.map((d) => (
             <tr key={d.id}>
               <td>{fmtTime(d.created_at)}</td>
-              <td>{d.drawer_nickname}<div className="muted">{d.drawer_email}</div></td>
+              <td>{d.drawer_nickname}<div className="muted">{d.drawer_email || 'LINE 登入'}</div></td>
               <td>#{d.capsule_id} {d.title} {d.is_special ? <span className="tag tag-solid">特別蛋</span> : null}</td>
               <td>{d.provider_nickname || <span className="tag">主辦方</span>}</td>
               <td><span className="tag">已抽取</span></td>

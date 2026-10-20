@@ -16,7 +16,7 @@ function readCookie(req, name) {
   return null;
 }
 
-function cookieOptions(maxAge) {
+export function cookieOptions(maxAge) {
   return {
     httpOnly: true,
     sameSite: 'lax',
@@ -26,20 +26,21 @@ function cookieOptions(maxAge) {
   };
 }
 
-// Attaches req.session = { email, isAdmin } when the cookie is valid. Slides user sessions forward.
+// Attaches req.session = { email, lineUserId, lineName, isAdmin } when the cookie is valid.
+// email is null for a LINE login without a shared email. Slides user sessions forward.
 export async function loadSession(req, res, next) {
   const token = readCookie(req, AUTH.cookieName);
   if (!token) return next();
   const hash = sha256(token);
   const [[row]] = await pool.query(
-    'SELECT email, is_admin, expires_at FROM sessions WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP()',
+    'SELECT email, line_user_id, line_name, is_admin, expires_at FROM sessions WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP()',
     [hash],
   );
   if (!row) return next();
   // Admin list lives in env: removing someone from ADMIN_EMAILS revokes their admin session.
   const isAdmin = Boolean(row.is_admin) && adminEmails.has(row.email);
   if (row.is_admin && !isAdmin) return next();
-  req.session = { email: row.email, isAdmin };
+  req.session = { email: row.email, lineUserId: row.line_user_id, lineName: row.line_name, isAdmin };
 
   if (!isAdmin) {
     const remaining = new Date(row.expires_at).getTime() - Date.now();
@@ -53,6 +54,25 @@ export async function loadSession(req, res, next) {
     }
   }
   next();
+}
+
+// Creates a session and sets the cookie. LINE logins are never admin (admins sign in by email).
+export async function startSession(res, { email = null, lineUserId = null, lineName = null, isAdmin = false }) {
+  const ttl = isAdmin ? AUTH.adminSessionMs : AUTH.userSessionMs;
+  const token = crypto.randomBytes(32).toString('base64url');
+  await pool.query(
+    'INSERT INTO sessions (token_hash, email, line_user_id, line_name, is_admin, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [sha256(token), email, lineUserId, lineName, isAdmin, new Date(Date.now() + ttl)],
+  );
+  res.cookie(AUTH.cookieName, token, cookieOptions(ttl));
+}
+
+// The participant behind a session: by LINE user ID for LINE logins, otherwise by email.
+export async function findUser(session, conn = pool) {
+  const [[u]] = session.lineUserId
+    ? await conn.query('SELECT * FROM users WHERE line_user_id = ?', [session.lineUserId])
+    : await conn.query('SELECT * FROM users WHERE email = ?', [session.email]);
+  return u || null;
 }
 
 export function requireAdmin(req, res, next) {
@@ -105,30 +125,27 @@ authRouter.post('/verify', async (req, res) => {
   await pool.query('UPDATE login_codes SET used_at = UTC_TIMESTAMP() WHERE id = ?', [row.id]);
 
   const isAdmin = adminEmails.has(email);
-  const ttl = isAdmin ? AUTH.adminSessionMs : AUTH.userSessionMs;
-  const token = crypto.randomBytes(32).toString('base64url');
-  await pool.query('INSERT INTO sessions (token_hash, email, is_admin, expires_at) VALUES (?, ?, ?, ?)', [
-    sha256(token),
-    email,
-    isAdmin,
-    new Date(Date.now() + ttl),
-  ]);
-  res.cookie(AUTH.cookieName, token, cookieOptions(ttl));
+  await startSession(res, { email, isAdmin });
   res.json({ ok: true, email, isAdmin });
+});
+
+// Which sign-in methods the login page should offer.
+authRouter.get('/options', (req, res) => {
+  res.json({ line: Boolean(env.LINE_CHANNEL_ID && env.LINE_CHANNEL_SECRET) });
 });
 
 authRouter.get('/me', async (req, res) => {
   if (!req.session) return res.json({ user: null });
-  const { email, isAdmin } = req.session;
+  const { email, lineUserId, lineName, isAdmin } = req.session;
   let profile = null;
   if (!isAdmin) {
-    const [[u]] = await pool.query(
-      'SELECT id, nickname, region, bio, line_id, instagram, phone, show_email FROM users WHERE email = ?',
-      [email],
-    );
-    profile = u || null;
+    const u = await findUser(req.session);
+    profile = u && {
+      id: u.id, nickname: u.nickname, region: u.region, bio: u.bio,
+      line_id: u.line_id, instagram: u.instagram, phone: u.phone, contact_email: u.contact_email,
+    };
   }
-  res.json({ user: { email, isAdmin, profile } });
+  res.json({ user: { email, isAdmin, via: lineUserId ? 'line' : 'email', lineName, profile } });
 });
 
 authRouter.post('/logout', async (req, res) => {

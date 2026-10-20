@@ -117,6 +117,13 @@ zip -rq ../culture.machine-deploy.zip server.cjs app.js package.json server publ
 | `SMTP_USER` | `noreply@inwave-studio.com`（完整信箱） | Email Accounts |
 | `SMTP_PASSWORD` | 信箱密碼 | Email Accounts |
 | `SMTP_FROM` | `文化扭蛋機 <noreply@inwave-studio.com>` | 寄件人顯示名稱 |
+| `LINE_CHANNEL_ID` | LINE Login channel 的 Channel ID | LINE Developers → channel → Basic settings |
+| `LINE_CHANNEL_SECRET` | LINE Login channel 的 Channel secret | 同上 |
+| `LINE_CALLBACK_URL` | 選填，例如 `https://culture-machine.org/api/auth/line/callback` | 不填就用目前網址自動組出來；要跟 LINE Developers 登記的 Callback URL 完全一樣 |
+
+`LINE_CHANNEL_ID` 和 `LINE_CHANNEL_SECRET` 沒設時，登入頁不會出現 LINE 按鈕，只剩 Email 登入。
+
+`LINE_AUTHORIZE_URL`、`LINE_API_BASE` 只給 `scripts/e2e-line.mjs` 測試用，正式模式下會被忽略，主機上不要設。
 
 不用設：`NODE_ENV`（Application mode 選 Production 會自動設）、`PORT`（Passenger 提供）。**主機上絕對不要設 `MAIL_DEV_LOG`**，設了驗證碼就不會寄出。
 

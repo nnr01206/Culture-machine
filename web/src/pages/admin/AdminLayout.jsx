@@ -15,7 +15,7 @@ export default function AdminLayout() {
   if (!user.isAdmin) {
     return (
       <main className="page">
-        <p className="error">{user.email} 不是管理者帳號。</p>
+        <p className="error">{user.email || '這個 LINE 帳號'} 不是管理者帳號，管理者請用 Email 登入。</p>
         <button className="btn btn-ghost" onClick={logout}>登出</button>
       </main>
     );

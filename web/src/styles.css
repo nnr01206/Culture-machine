@@ -99,6 +99,15 @@ pre { background: var(--orange-tint); padding: 12px; border-radius: 8px; overflo
 .notice { background: var(--orange-tint); color: var(--orange-dark); padding: 10px 14px; border-radius: 8px; }
 .form-section { margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--line); font-size: .95rem; }
 .btn-big { padding: 14px 20px; font-size: 1.05rem; }
+.login-card { padding: 28px 22px; margin-top: 20px; }
+.login-title { margin: 0 0 18px; color: var(--ink); font-size: 1.3rem; }
+.login-hint { margin: 12px 0 0; text-align: center; }
+.divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 16px; color: var(--muted); font-size: .9rem; }
+.divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+/* Outlined like the other sign-in options; LINE's green lives in the icon. */
+.btn-line { margin-top: 0; gap: 10px; background: #fff; color: var(--ink); border: 1.5px solid var(--line); }
+.btn-line:hover { border-color: #06c755; background: #f3fcf6; }
+.link-button { margin-top: 14px; padding: 4px; border: 0; background: none; font: inherit; font-size: .9rem; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .btn-block + .btn-block { margin-top: 10px; }
 .icon { flex: none; vertical-align: -0.2em; }
 .bar-label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

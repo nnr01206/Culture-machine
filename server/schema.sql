@@ -1,15 +1,19 @@
 -- culture.machine schema. Applied on startup; every statement must be idempotent.
 
+-- A user signs in with a verified email (code), with LINE, or both (linked by LINE's email).
+-- email is NULL for LINE users who didn't share one; they just get no notification mail.
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(255) NOT NULL UNIQUE,
+  email VARCHAR(255) NULL UNIQUE,
+  line_user_id VARCHAR(64) NULL UNIQUE,
   nickname VARCHAR(50) NOT NULL,
   region VARCHAR(50) NOT NULL,
   bio VARCHAR(200) NULL,
   line_id VARCHAR(100) NULL,
   instagram VARCHAR(100) NULL,
   phone VARCHAR(30) NULL,
-  show_email BOOLEAN NOT NULL DEFAULT FALSE,
+  contact_email VARCHAR(255) NULL COMMENT 'shown after a draw; not verified, never used to sign in',
+  show_email BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'superseded by contact_email (decision 32)',
   consent_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -25,10 +29,13 @@ CREATE TABLE IF NOT EXISTS login_codes (
   INDEX idx_login_codes_email (email, created_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Admins have sessions but no users row (decision 12), so sessions key on email.
+-- Admins have sessions but no users row (decision 12), so sessions key on email, or on the LINE
+-- user ID for LINE logins (never admin). line_name pre-fills the nickname on the profile form.
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash CHAR(64) PRIMARY KEY,
-  email VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NULL,
+  line_user_id VARCHAR(64) NULL,
+  line_name VARCHAR(100) NULL,
   is_admin BOOLEAN NOT NULL DEFAULT FALSE,
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

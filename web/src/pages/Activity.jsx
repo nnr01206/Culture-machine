@@ -59,7 +59,7 @@ export default function Activity() {
             <HowItWorks />
           </section>
           {round && <Link className="btn btn-block btn-big" to={`/login?next=${encodeURIComponent(here)}`}>開始參加</Link>}
-          <p className="muted center">用 Email 收驗證碼登入，不用設定密碼。</p>
+          <p className="muted center">用 LINE 或 Email 登入，不用設定密碼。</p>
         </>
       )}
 

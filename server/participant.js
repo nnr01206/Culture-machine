@@ -4,6 +4,7 @@ import { sendMail } from './mail.js';
 import { CATEGORIES, DURATIONS } from './config.js';
 import { HttpError } from './errors.js';
 import { currentRound, withStatus } from './rounds.js';
+import { findUser } from './auth.js';
 
 export const participantRouter = Router();
 
@@ -21,13 +22,8 @@ function requireParticipant(req, res, next) {
   next();
 }
 
-async function loadUser(email) {
-  const [[u]] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-  return u || null;
-}
-
 async function requireProfile(req, res, next) {
-  req.user = await loadUser(req.session.email);
+  req.user = await findUser(req.session);
   if (!req.user) throw new HttpError(409, '請先填寫基本資料');
   next();
 }
@@ -47,7 +43,7 @@ function contactOf(u) {
     line_id: u.line_id,
     instagram: u.instagram,
     phone: u.phone,
-    email: u.show_email ? u.email : null,
+    email: u.contact_email || null,
   };
 }
 
@@ -81,17 +77,20 @@ participantRouter.put('/me/profile', requireParticipant, async (req, res) => {
     line_id: str(b.line_id, 100) || null,
     instagram: str(b.instagram, 100) || null,
     phone: str(b.phone, 30) || null,
-    show_email: Boolean(b.show_email),
+    contact_email: str(b.contact_email, 255).toLowerCase() || null,
   };
   if (!fields.nickname || !fields.region) throw new HttpError(400, '暱稱和所在地區都要填');
-  if (!fields.line_id && !fields.instagram) throw new HttpError(400, 'LINE ID 和 Instagram 至少填一種，抽中後對方才找得到你');
+  if (fields.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.contact_email)) throw new HttpError(400, 'Email 格式不正確');
+  if (!fields.line_id && !fields.instagram && !fields.contact_email) throw new HttpError(400, 'LINE ID、Instagram、Email 至少填一種，抽中後對方才找得到你');
 
-  const existing = await loadUser(req.session.email);
+  const existing = await findUser(req.session);
   if (existing) {
     await pool.query('UPDATE users SET ? WHERE id = ?', [fields, existing.id]);
   } else {
     if (!b.consent) throw new HttpError(400, '請先閱讀並同意個資使用說明');
-    await pool.query('INSERT INTO users SET ?', [{ ...fields, email: req.session.email, consent_at: new Date() }]);
+    await pool.query('INSERT INTO users SET ?', [{
+      ...fields, email: req.session.email, line_user_id: req.session.lineUserId, consent_at: new Date(),
+    }]);
   }
   res.json({ ok: true });
 });
@@ -125,7 +124,7 @@ async function recordsFor(userId, activityId = null) {
     `SELECT d.id AS draw_id, d.created_at AS drawn_at, r.id AS round_id, r.name AS round_name,
             a.organizer_name, a.organizer_contact,
             c.id, c.title, c.category, c.duration, c.description, c.conditions, c.user_id, c.is_special,
-            u.nickname, u.region, u.bio, u.line_id, u.instagram, u.phone, u.email, u.show_email
+            u.nickname, u.region, u.bio, u.line_id, u.instagram, u.phone, u.contact_email
      FROM draws d
      JOIN capsules c ON c.id = d.capsule_id
      JOIN rounds r ON r.id = d.round_id
@@ -304,7 +303,11 @@ participantRouter.post('/activities/:slug/draw', requireParticipant, requireProf
 });
 
 // Fire-and-forget: a mail failure must not undo a successful draw.
+// Goes to the verified login email, else the contact email. Without either there is no mail;
+// the provider still sees the draw in their records.
 function notifyProvider({ req, activity, capsule, provider, drawer }) {
+  const to = provider.email || provider.contact_email;
+  if (!to) return;
   const link = `${req.protocol}://${req.get('host')}/activity?id=${activity.slug}`;
   const lines = [
     `${provider.nickname} 你好：`,
@@ -318,7 +321,7 @@ function notifyProvider({ req, activity, capsule, provider, drawer }) {
     drawer.line_id && `LINE ID：${drawer.line_id}`,
     drawer.instagram && `Instagram：${drawer.instagram}`,
     drawer.phone && `電話：${drawer.phone}`,
-    drawer.show_email && `Email：${drawer.email}`,
+    drawer.contact_email && `Email：${drawer.contact_email}`,
     '',
     '對方也看得到你的聯絡方式。誰先打聲招呼都可以，一起討論怎麼交換吧。',
     '交換的前提只有：自主、知情、雙方同意。',
@@ -326,7 +329,7 @@ function notifyProvider({ req, activity, capsule, provider, drawer }) {
     `查看你的扭蛋：${link}`,
   ].filter((l) => typeof l === 'string'); // drops the optional lines that evaluated to null/0
   sendMail({
-    to: provider.email,
+    to,
     subject: `你的文化扭蛋「${capsule.title}」被抽到了！`,
     text: lines.join('\n'),
   }).catch((err) => console.error('notifyProvider failed:', err.message));

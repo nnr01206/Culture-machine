@@ -21,9 +21,9 @@ export default function Profile() {
     if (user && !form) {
       const p = user.profile || {};
       setForm({
-        nickname: p.nickname || '', region: p.region || '', bio: p.bio || '',
+        nickname: p.nickname || user.lineName || '', region: p.region || '', bio: p.bio || '',
         line_id: p.line_id || '', instagram: p.instagram || '', phone: p.phone || '',
-        show_email: Boolean(p.show_email), consent: false,
+        contact_email: p.contact_email || '', consent: false,
       });
     }
   }, [user, form, navigate, next]);
@@ -60,14 +60,21 @@ export default function Profile() {
         <label htmlFor="bio">一句自我介紹</label>
         <input id="bio" maxLength={200} value={form.bio} onChange={set('bio')} placeholder="例如：在池上開咖啡店，喜歡聊地方創業" />
 
-        <h3 className="form-section">聯絡方式 <span className="muted" style={{ fontWeight: 400 }}>LINE 和 IG 至少填一種，抽中後才顯示</span></h3>
+        <h3 className="form-section">聯絡方式 <span className="muted" style={{ fontWeight: 400 }}>LINE、IG、Email 至少填一種，抽中後才顯示</span></h3>
         <label htmlFor="line_id">LINE ID</label>
         <input id="line_id" maxLength={100} value={form.line_id} onChange={set('line_id')} autoCapitalize="off" />
         <label htmlFor="instagram">Instagram</label>
         <input id="instagram" maxLength={100} value={form.instagram} onChange={set('instagram')} autoCapitalize="off" placeholder="@帳號" />
         <label htmlFor="phone">電話（選填）</label>
         <input id="phone" type="tel" maxLength={30} value={form.phone} onChange={set('phone')} />
-        <label className="check"><input type="checkbox" checked={form.show_email} onChange={set('show_email')} /> 抽中後也顯示我的 Email（{user.email}）</label>
+        <label htmlFor="contact_email">Email</label>
+        <input id="contact_email" type="email" inputMode="email" maxLength={255} value={form.contact_email} onChange={set('contact_email')} autoCapitalize="off" placeholder="you@example.com" />
+        {user.email && !form.contact_email && (
+          <button type="button" className="link-button" style={{ marginTop: 6 }} onClick={() => setForm({ ...form, contact_email: user.email })}>填入我的登入 Email（{user.email}）</button>
+        )}
+        {!user.email && (
+          <p className="muted small">你用 LINE 登入，沒有提供 Email。這裡填了 Email 的話，扭蛋被抽到時通知信會寄到這裡；沒填也沒關係，回到活動頁或首頁就看得到是誰抽到的。</p>
+        )}
 
         {isNew && (
           <>

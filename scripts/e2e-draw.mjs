@@ -83,7 +83,7 @@ await b('/me/profile', 'PUT', { nickname: 'B', region: '池上', instagram: 'b_i
 await b(`/activities/${slug}/capsules`, 'POST', capsule('B 的蛋'));
 const drawB = await b(`/activities/${slug}/draw`, 'POST');
 check(drawB.status === 200 && drawB.data.capsule.title === 'A 的蛋' && drawB.data.provider.line_id === 'a-line', 'B draws A and sees A\'s LINE');
-check(drawB.data.provider.email === null, 'provider email hidden when show_email is off');
+check(drawB.data.provider.email === null, 'no contact email → no email shown');
 const meA = (await a(`/activities/${slug}/me`)).data;
 check(meA.myCapsules[0].drawnBy[0]?.instagram === 'b_ig', 'A sees B\'s contact on their capsule');
 
@@ -144,6 +144,9 @@ check((await a(`/activities/${slug}/capsules`, 'POST', capsule('late'))).status 
 const meAfter = (await b(`/activities/${slug}/me`)).data;
 check(meAfter.round === null && meAfter.myDraws.length === 1, 'after round ends, drawn capsules still visible');
 check((await admin(`/admin/rounds/${round.id}`, 'DELETE')).status === 409, 'round with capsules cannot be deleted');
+const again = await admin('/admin/rounds', 'POST', { name: '重開一場', activity_id: act.id, starts_at: hours(-1), ends_at: hours(24) });
+check(again.status === 201, 'after ending early, a new event can take the same time slot');
+check((await a(`/activities/${slug}`)).data.round?.name === '重開一場', 'QR point leads to the new event');
 
 await db.end();
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');

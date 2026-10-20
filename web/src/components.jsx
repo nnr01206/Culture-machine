@@ -14,7 +14,7 @@ export function Brand({ subtitle }) {
 }
 
 export function Footer() {
-  return <footer className="footer-band">台東文化願景論壇・Gently Radical, Wildly Local</footer>;
+  return <footer className="footer-band">台東文化願景論壇</footer>;
 }
 
 // The four steps from the poster (decision 26).

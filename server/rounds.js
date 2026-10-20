@@ -46,9 +46,14 @@ export function parseRange(body, { startLabel = '開始時間', endLabel = '結�
 const fmt = (d) => new Date(d).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 // Call inside a transaction that has locked the QR point (activities row).
+// Only the part from now on counts: the rule exists so a QR code never leads to two live events, and
+// time that has passed can't. So an event ended early (ends_at = the moment it was ended) frees the
+// rest of its slot, and a new event may start in that slot.
 export async function assertNoOverlap(conn, activityId, startsAt, endsAt, excludeRoundId = 0) {
   const [[clash]] = await conn.query(
-    'SELECT name, starts_at, ends_at FROM rounds WHERE activity_id = ? AND id <> ? AND starts_at < ? AND ends_at > ? LIMIT 1',
+    `SELECT name, starts_at, ends_at FROM rounds
+     WHERE activity_id = ? AND id <> ? AND starts_at < ? AND ends_at > GREATEST(?, UTC_TIMESTAMP())
+     LIMIT 1`,
     [activityId, excludeRoundId, endsAt, startsAt],
   );
   if (clash) throw new HttpError(409, `同一個 QR 點位的活動時間不能重疊：跟「${clash.name}」（${fmt(clash.starts_at)} – ${fmt(clash.ends_at)}）重疊了`);

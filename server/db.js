@@ -46,6 +46,18 @@ async function upgrade() {
     await pool.query('UPDATE rounds SET ends_at = starts_at + INTERVAL 1 SECOND WHERE ends_at IS NULL');
     await pool.query('ALTER TABLE rounds MODIFY ends_at DATETIME NOT NULL, DROP COLUMN is_open');
   }
+  // v3: LINE login. Email becomes optional; users and sessions can be keyed by the LINE user ID.
+  if (!(await columnExists('users', 'line_user_id'))) {
+    await pool.query('ALTER TABLE users MODIFY email VARCHAR(255) NULL, ADD COLUMN line_user_id VARCHAR(64) NULL UNIQUE AFTER email');
+  }
+  if (!(await columnExists('sessions', 'line_user_id'))) {
+    await pool.query('ALTER TABLE sessions MODIFY email VARCHAR(255) NULL, ADD COLUMN line_user_id VARCHAR(64) NULL AFTER email, ADD COLUMN line_name VARCHAR(100) NULL AFTER line_user_id');
+  }
+  // v4: a contact Email field replaces the "show my login email" checkbox; whoever ticked it keeps showing it.
+  if (!(await columnExists('users', 'contact_email'))) {
+    await pool.query('ALTER TABLE users ADD COLUMN contact_email VARCHAR(255) NULL AFTER phone');
+    await pool.query('UPDATE users SET contact_email = email WHERE show_email = TRUE AND email IS NOT NULL');
+  }
 }
 
 // Runs fn inside a transaction on a dedicated connection.
