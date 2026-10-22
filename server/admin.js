@@ -17,7 +17,7 @@ const str = (v, max) => {
 };
 
 // 10 chars from an unambiguous alphabet, shaped like "abcd-efghj".
-function newSlug() {
+export function newSlug() {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
   const pick = () => alphabet[crypto.randomInt(alphabet.length)];
   const part = (n) => Array.from({ length: n }, pick).join('');

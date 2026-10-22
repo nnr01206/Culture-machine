@@ -121,6 +121,7 @@ zip -rq ../culture.machine-deploy.zip server.cjs app.js package.json server publ
 | `LINE_CHANNEL_SECRET` | LINE Login channel 的 Channel secret | 同上 |
 | `LINE_CALLBACK_URL` | 選填，例如 `https://culture-machine.org/api/auth/line/callback` | 不填就用目前網址自動組出來；要跟 LINE Developers 登記的 Callback URL 完全一樣 |
 
+| `LOAD_TEST` | 只有壓測時設 `1` | 開啟壓測 API（見下方「壓力測試」）；Production 模式下設了也不會開，測完拿掉 |
 | `DRAW_NOTIFY_MAIL` | 選填，`1` = 被抽中時寄信通知投蛋的人 | 預設不寄（decision 35）；壓測時一定不要設 |
 
 `LINE_CHANNEL_ID` 和 `LINE_CHANNEL_SECRET` 沒設時，登入頁不會出現 LINE 按鈕，只剩 Email 登入。
@@ -134,6 +135,37 @@ zip -rq ../culture.machine-deploy.zip server.cjs app.js package.json server publ
 - **`.env` 檔**：放在應用程式根目錄（跟 `server.cjs` 同層）。程式從這個固定位置讀，不受啟動目錄影響；網站只送出 `public/`，所以 `.env` 不會被網路存取到。值裡有 `#` 或空白要用雙引號包起來。
 
 同一個變數兩邊都有時，以 cPanel 介面的為準。改完參數要按 **Restart** 才會生效。
+
+### 壓力測試：多人同時搶扭蛋
+
+測的是「很多人同時抽的時候，規則還對不對」：同一顆蛋不會被兩人抽到、不會抽到自己的、連按兩次只扣一次。走的是真正的抽蛋 API，速度只記錄、不當通過標準。
+
+1. **選正式站沒有活動的時間**：測試站和正式站在同一個 cPanel 帳號，共用資源。
+2. 測試站的 Setup Node.js App 加環境變數 `LOAD_TEST=1`，確認 `DRAW_NOTIFY_MAIL` 沒設，按 Restart。
+3. 用管理者帳號登入測試站後台，從瀏覽器開發者工具 → Application → Cookies 複製 `cm_session` 的值。
+4. 在本機執行（會要你貼上 `cm_session`，不會顯示也不會存檔）：
+   ```bash
+   node scripts/load-draw.mjs --base https://dev.culture.machine.inwave-studio.com --mode drain
+   node scripts/load-draw.mjs --base https://dev.culture.machine.inwave-studio.com --mode timed --duration 20
+   ```
+   跑的時候同時開著後台「系統狀態」頁和 cPanel 的 Resource Usage。
+5. 測完把 `LOAD_TEST` 拿掉，按 Restart。
+
+| 參數 | 預設 | 說明 |
+|---|---|---|
+| `--mode` | `drain` | `drain` 量 200 顆全部抽完要幾秒（目標 60 秒）；`timed` 量固定秒數內成功幾次 |
+| `--concurrency` | 5 | 同時幾條連線在搶 |
+| `--duration` | 20 | `timed` 模式的秒數 |
+| `--users` | 200 | 測試帳號數（每人投 1 顆） |
+| `--double-tap` | 0.15 | 有多少比例的人同時按兩次 |
+
+腳本會先請伺服器建一個「【壓測】」QR 點位、200 個 `@loadtest.invalid` 測試帳號和它們的登入狀態（1 小時過期），不碰真實資料。正式站網址會被腳本直接拒絕。
+
+**測完資料會保留**，可以到後台「活動」看「【壓測】多人搶扭蛋」的每一筆抽取。看完自己清除，下一次壓測前也一定要先清除：
+```bash
+node scripts/load-draw.mjs --base https://dev.culture.machine.inwave-studio.com --cleanup
+```
+真正的活動或 QR 點位，名稱不要用「【壓測】」開頭，清除時會被當成測試資料刪掉。
 
 ### SSL 憑證
 

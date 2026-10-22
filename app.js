@@ -7,6 +7,7 @@ import { pool, migrate } from './server/db.js';
 import { authRouter, loadSession } from './server/auth.js';
 import { lineRouter } from './server/line.js';
 import { adminRouter } from './server/admin.js';
+import { loadtestRouter } from './server/loadtest.js';
 import { publicRouter } from './server/public-api.js';
 import { participantRouter } from './server/participant.js';
 import { logError, monitorRequests, startMonitor } from './server/monitor.js';
@@ -40,6 +41,7 @@ app.get('/api/health', async (req, res) => {
 app.use('/api', loadSession);
 app.use('/api/auth/line', lineRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/admin/loadtest', loadtestRouter); // 404 unless LOAD_TEST=1 on a non-production server
 app.use('/api/admin', adminRouter);
 app.use('/api', participantRouter);
 app.use('/api', publicRouter);
