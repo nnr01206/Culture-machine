@@ -6,6 +6,7 @@ import { requireAdmin } from './auth.js';
 import { CATEGORIES, DURATIONS } from './config.js';
 import { HttpError } from './errors.js';
 import { withStatus, parseRange, assertNoOverlap, roundStatus } from './rounds.js';
+import { liveStats } from './monitor.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -311,6 +312,22 @@ adminRouter.get('/rounds/:id/draws', async (req, res) => {
 });
 
 // ---- Mail test ----
+
+// System status page (decision 34): live numbers, the last hours minute by minute, recent errors.
+adminRouter.get('/system', async (req, res) => {
+  const hours = Math.min(48, Math.max(1, Number(req.query.hours) || 3));
+  const [minutes] = await pool.query(
+    `SELECT minute, SUM(requests) AS requests, SUM(status_4xx) AS status_4xx, SUM(status_5xx) AS status_5xx,
+            MAX(p50_ms) AS p50_ms, MAX(p95_ms) AS p95_ms, MAX(max_ms) AS max_ms, SUM(max_in_flight) AS max_in_flight,
+            SUM(rss_mb) AS rss_mb, SUM(cpu_pct) AS cpu_pct, MAX(loop_p99_ms) AS loop_p99_ms,
+            SUM(db_max_busy) AS db_max_busy, SUM(db_waits) AS db_waits, COUNT(*) AS processes
+     FROM metrics WHERE minute >= UTC_TIMESTAMP() - INTERVAL ? HOUR
+     GROUP BY minute ORDER BY minute DESC`,
+    [hours],
+  );
+  const [errors] = await pool.query('SELECT * FROM error_logs ORDER BY id DESC LIMIT 100');
+  res.json({ live: liveStats(), minutes, errors });
+});
 
 adminRouter.post('/mail-test', async (req, res) => {
   const to = str(req.body?.to);

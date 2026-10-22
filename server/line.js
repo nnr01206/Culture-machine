@@ -6,17 +6,21 @@ import { Router } from 'express';
 import { pool } from './db.js';
 import { adminEmails, env, isProd } from './config.js';
 import { cookieOptions, startSession } from './auth.js';
+import { logError } from './monitor.js';
+
+// Trimmed because a stray space pasted into the cPanel env screen breaks the exact URL match at LINE.
+const setting = (name) => (env[name] || '').trim();
 
 const FLOW_COOKIE = 'cm_line';
 const FLOW_PATH = '/api/auth/line';
 const FLOW_TTL_MS = 10 * 60 * 1000;
 
 // The two URL overrides exist only so the e2e test can point at a fake LINE; ignored in production.
-const authorizeUrl = () => (!isProd && env.LINE_AUTHORIZE_URL) || 'https://access.line.me/oauth2/v2.1/authorize';
-const apiBase = () => (!isProd && env.LINE_API_BASE) || 'https://api.line.me';
+const authorizeUrl = () => (!isProd && setting('LINE_AUTHORIZE_URL')) || 'https://access.line.me/oauth2/v2.1/authorize';
+const apiBase = () => (!isProd && setting('LINE_API_BASE')) || 'https://api.line.me';
 
 // Must match a Callback URL registered in the LINE Developers console exactly.
-const callbackUrl = (req) => env.LINE_CALLBACK_URL || `${req.protocol}://${req.get('host')}${FLOW_PATH}/callback`;
+const callbackUrl = (req) => setting('LINE_CALLBACK_URL') || `${req.protocol}://${req.get('host')}${FLOW_PATH}/callback`;
 
 const random = (bytes = 24) => crypto.randomBytes(bytes).toString('base64url');
 const safeNext = (next) => (typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : '/');
@@ -58,12 +62,12 @@ async function resolveIdentity(lineUserId, lineEmail) {
 export const lineRouter = Router();
 
 lineRouter.get('/start', (req, res) => {
-  if (!env.LINE_CHANNEL_ID || !env.LINE_CHANNEL_SECRET) return res.redirect('/login?error=line_off');
+  if (!setting('LINE_CHANNEL_ID') || !setting('LINE_CHANNEL_SECRET')) return res.redirect('/login?error=line_off');
   const flow = { state: random(), nonce: random(), verifier: random(48), next: safeNext(req.query.next) };
   res.cookie(FLOW_COOKIE, Buffer.from(JSON.stringify(flow)).toString('base64url'), { ...cookieOptions(FLOW_TTL_MS), path: FLOW_PATH });
   const query = new URLSearchParams({
     response_type: 'code',
-    client_id: env.LINE_CHANNEL_ID,
+    client_id: setting('LINE_CHANNEL_ID'),
     redirect_uri: callbackUrl(req),
     state: flow.state,
     scope: 'openid profile email',
@@ -88,19 +92,19 @@ lineRouter.get('/callback', async (req, res) => {
       grant_type: 'authorization_code',
       code: String(req.query.code),
       redirect_uri: callbackUrl(req),
-      client_id: env.LINE_CHANNEL_ID,
-      client_secret: env.LINE_CHANNEL_SECRET,
+      client_id: setting('LINE_CHANNEL_ID'),
+      client_secret: setting('LINE_CHANNEL_SECRET'),
       code_verifier: flow.verifier,
     });
     // LINE checks the signature, expiry, audience and our nonce.
-    const id = await postForm('/oauth2/v2.1/verify', { id_token: token.id_token, client_id: env.LINE_CHANNEL_ID, nonce: flow.nonce });
-    if (!id.sub || id.aud !== env.LINE_CHANNEL_ID) throw new Error('LINE ID token has no subject or a wrong audience');
+    const id = await postForm('/oauth2/v2.1/verify', { id_token: token.id_token, client_id: setting('LINE_CHANNEL_ID'), nonce: flow.nonce });
+    if (!id.sub || id.aud !== setting('LINE_CHANNEL_ID')) throw new Error('LINE ID token has no subject or a wrong audience');
 
     const email = await resolveIdentity(id.sub, id.email ? String(id.email).trim().toLowerCase() : null);
     await startSession(res, { email, lineUserId: id.sub, lineName: id.name ? String(id.name).slice(0, 100) : null });
     res.redirect(flow.next);
   } catch (err) {
-    console.error('LINE login failed:', err.message);
+    logError('line_login', err, req);
     fail('line_failed');
   }
 });

@@ -121,6 +121,8 @@ zip -rq ../culture.machine-deploy.zip server.cjs app.js package.json server publ
 | `LINE_CHANNEL_SECRET` | LINE Login channel 的 Channel secret | 同上 |
 | `LINE_CALLBACK_URL` | 選填，例如 `https://culture-machine.org/api/auth/line/callback` | 不填就用目前網址自動組出來；要跟 LINE Developers 登記的 Callback URL 完全一樣 |
 
+| `DRAW_NOTIFY_MAIL` | 選填，`1` = 被抽中時寄信通知投蛋的人 | 預設不寄（decision 35）；壓測時一定不要設 |
+
 `LINE_CHANNEL_ID` 和 `LINE_CHANNEL_SECRET` 沒設時，登入頁不會出現 LINE 按鈕，只剩 Email 登入。
 
 `LINE_AUTHORIZE_URL`、`LINE_API_BASE` 只給 `scripts/e2e-line.mjs` 測試用，正式模式下會被忽略，主機上不要設。

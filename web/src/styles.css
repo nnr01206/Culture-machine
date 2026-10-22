@@ -314,3 +314,12 @@ h3.records-title { margin: 16px 0 4px; }
 .recent-row:hover { border-color: var(--orange); }
 .recent-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .recent-info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Admin system status (decision 34) */
+.stat-warn { border-color: #c0261b; }
+.stat-warn b { color: #c0261b; }
+.metrics-table td, .metrics-table th { white-space: nowrap; }
+.error-log { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.error-log summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; cursor: pointer; }
+.error-log-msg { flex-basis: 100%; color: #c0261b; font-size: .9rem; overflow-wrap: anywhere; }
+.error-log pre { font-size: .75rem; overflow-x: auto; background: var(--orange-tint); padding: 10px; border-radius: 8px; }

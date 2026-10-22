@@ -15,6 +15,7 @@ export default function Profile() {
   const [form, setForm] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mergeEmail, setMergeEmail] = useState(null); // set when the server offers to merge (decision 33)
 
   useEffect(() => {
     if (user === null) navigate(`/login?next=${encodeURIComponent(`/profile?next=${encodeURIComponent(next)}`)}`, { replace: true });
@@ -34,15 +35,28 @@ export default function Profile() {
   const isNew = !user.profile;
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const save = async (extra = {}) => {
     setError(''); setBusy(true);
     try {
-      await api('/me/profile', { method: 'PUT', body: form });
+      await api('/me/profile', { method: 'PUT', body: { ...form, ...extra } });
       await refresh();
       navigate(next, { replace: true });
-    } catch (err) { setError(err.message); } finally { setBusy(false); }
+    } catch (err) {
+      if (err.code === 'MERGE_AVAILABLE') setMergeEmail(form.contact_email.trim().toLowerCase());
+      else setError(err.message);
+    } finally { setBusy(false); }
   };
+  const submit = (e) => { e.preventDefault(); save(); };
+
+  if (mergeEmail) {
+    return (
+      <main className="page">
+        <Brand subtitle="你之前參加過嗎？" />
+        <MergeAccount email={mergeEmail} form={form} onDone={async () => { await refresh(); navigate(next, { replace: true }); }}
+          onSkip={() => { setMergeEmail(null); save({ skip_merge: true }); }} onBack={() => setMergeEmail(null)} />
+      </main>
+    );
+  }
 
   return (
     <main className="page">
@@ -87,5 +101,73 @@ export default function Profile() {
         <button className="btn btn-block" disabled={busy}>{busy ? '儲存中…' : isNew ? '完成，開始玩' : '儲存'}</button>
       </form>
     </main>
+  );
+}
+
+// A first-time LINE user typed the email of an existing account. Proving the email with a code merges
+// this LINE login into that account; "not me" creates a separate account instead.
+function MergeAccount({ email, form, onDone, onSkip, onBack }) {
+  const [step, setStep] = useState('ask');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const sendCode = async () => {
+    setError(''); setBusy(true);
+    try {
+      await api('/auth/request-code', { method: 'POST', body: { email } });
+      setStep('code'); setCooldown(60);
+    } catch (err) {
+      if (err.status === 429) setStep('code'); // a code was sent moments ago; it still works
+      setError(err.message);
+    } finally { setBusy(false); }
+  };
+
+  const merge = async (e) => {
+    e.preventDefault();
+    setError(''); setBusy(true);
+    try {
+      await api('/me/merge', { method: 'POST', body: { ...form, email, code } });
+      await onDone();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
+  if (step === 'ask') {
+    return (
+      <div className="card">
+        <p style={{ marginTop: 0 }}><b>{email}</b> 已經有參加紀錄（之前用 Email 登入的帳號）。</p>
+        <p>如果是你本人，我們寄一組驗證碼到這個信箱，確認後就把這次的 LINE 登入合併進去：之前的扭蛋和紀錄都會保留，基本資料會更新成你剛剛填的。</p>
+        {error && <p className="error">{error}</p>}
+        <button type="button" className="btn btn-block" disabled={busy} onClick={sendCode}>{busy ? '寄送中…' : '是我，寄驗證碼'}</button>
+        <button type="button" className="btn btn-block btn-ghost" disabled={busy} onClick={onSkip}>不是我，建立新帳號</button>
+        <button type="button" className="link-button" onClick={onBack}>回去修改資料</button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="card" onSubmit={merge}>
+      <p style={{ marginTop: 0 }}>驗證碼已寄到 <b>{email}</b>，10 分鐘內有效。</p>
+      <p className="muted">沒收到的話，看一下垃圾信匣。</p>
+      <label htmlFor="merge-code">6 位數驗證碼</label>
+      <input id="merge-code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required
+        value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+      {error && <p className="error">{error}</p>}
+      <button className="btn btn-block" disabled={busy || code.length !== 6}>{busy ? '合併中…' : '確認合併'}</button>
+      <div className="row" style={{ marginTop: 12 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onBack}>回去修改資料</button>
+        <span className="spacer" />
+        <button type="button" className="btn btn-ghost btn-sm" disabled={cooldown > 0 || busy} onClick={sendCode}>
+          {cooldown > 0 ? `${cooldown} 秒後可重寄` : '重寄驗證碼'}
+        </button>
+      </div>
+    </form>
   );
 }

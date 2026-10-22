@@ -27,6 +27,7 @@ export default function AdminLayout() {
         <Link to="/admin" className="brand">文化扭蛋機・後台</Link>
         <Link to="/admin">活動</Link>
         <Link to="/admin/mail">寄信測試</Link>
+        <Link to="/admin/system">系統狀態</Link>
         <span className="spacer" />
         <span className="muted">{user.email}</span>
         <button className="btn btn-ghost btn-sm" onClick={async () => { await logout(); navigate('/login'); }}>登出</button>

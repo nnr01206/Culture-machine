@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { pool, tx } from './db.js';
 import { sendMail } from './mail.js';
-import { CATEGORIES, DURATIONS } from './config.js';
+import { CATEGORIES, DURATIONS, FEATURES } from './config.js';
 import { HttpError } from './errors.js';
 import { currentRound, withStatus } from './rounds.js';
-import { findUser } from './auth.js';
+import { consumeCode, findUser, normalizeEmail } from './auth.js';
+import { logError } from './monitor.js';
 
 export const participantRouter = Router();
 
@@ -68,8 +69,7 @@ async function creditsOf(conn, userId, roundId) {
 
 // ---- Profile ----
 
-participantRouter.put('/me/profile', requireParticipant, async (req, res) => {
-  const b = req.body || {};
+function profileFields(b) {
   const fields = {
     nickname: str(b.nickname, 50),
     region: str(b.region, 50),
@@ -82,16 +82,51 @@ participantRouter.put('/me/profile', requireParticipant, async (req, res) => {
   if (!fields.nickname || !fields.region) throw new HttpError(400, '暱稱和所在地區都要填');
   if (fields.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.contact_email)) throw new HttpError(400, 'Email 格式不正確');
   if (!fields.line_id && !fields.instagram && !fields.contact_email) throw new HttpError(400, 'LINE ID、Instagram、Email 至少填一種，抽中後對方才找得到你');
+  return fields;
+}
 
+// An email-login account that a first-time LINE user may be (decision 33). Only accounts not yet tied
+// to a LINE account qualify. Ownership is proven with an emailed code before anything is merged.
+async function mergeTarget(email) {
+  if (!email) return null;
+  const [[u]] = await pool.query('SELECT id FROM users WHERE email = ? AND line_user_id IS NULL', [email]);
+  return u || null;
+}
+
+participantRouter.put('/me/profile', requireParticipant, async (req, res) => {
+  const b = req.body || {};
+  const fields = profileFields(b);
   const existing = await findUser(req.session);
   if (existing) {
     await pool.query('UPDATE users SET ? WHERE id = ?', [fields, existing.id]);
   } else {
     if (!b.consent) throw new HttpError(400, '請先閱讀並同意個資使用說明');
+    // A new LINE user typed the email of an existing account: offer to merge instead of creating a duplicate.
+    if (req.session.lineUserId && !b.skip_merge && await mergeTarget(fields.contact_email)) {
+      throw new HttpError(409, '這個 Email 已經有參加紀錄', 'MERGE_AVAILABLE');
+    }
     await pool.query('INSERT INTO users SET ?', [{
       ...fields, email: req.session.email, line_user_id: req.session.lineUserId, consent_at: new Date(),
     }]);
   }
+  res.json({ ok: true });
+});
+
+// Merges a first-time LINE login into the existing email account after the code sent to that email
+// checks out: the account gets this LINE user ID and the profile just filled in.
+participantRouter.post('/me/merge', requireParticipant, async (req, res) => {
+  const b = req.body || {};
+  if (!req.session.lineUserId) throw new HttpError(400, '只有用 LINE 登入的帳號需要合併');
+  if (await findUser(req.session)) throw new HttpError(409, '這個 LINE 帳號已經有資料了');
+  const email = normalizeEmail(b.email);
+  const fields = profileFields(b);
+  if (!(await mergeTarget(email))) throw new HttpError(409, '這個 Email 沒有可以合併的帳號');
+  if (!(await consumeCode(email, b.code))) throw new HttpError(400, '驗證碼錯誤或已過期');
+
+  const [r] = await pool.query('UPDATE users SET ?, line_user_id = ? WHERE email = ? AND line_user_id IS NULL', [fields, req.session.lineUserId, email]);
+  if (!r.affectedRows) throw new HttpError(409, '這個帳號剛剛已經綁定其他 LINE 帳號');
+  // This browser's LINE session now belongs to that account, so show its (verified) email.
+  await pool.query('UPDATE sessions SET email = ? WHERE line_user_id = ?', [email, req.session.lineUserId]);
   res.json({ ok: true });
 });
 
@@ -289,7 +324,7 @@ participantRouter.post('/activities/:slug/draw', requireParticipant, requireProf
     ? await pool.query('SELECT * FROM users WHERE id = ?', [capsule.user_id]).then(([[u]]) => u)
     : null;
 
-  if (provider) notifyProvider({ req, activity, capsule, provider, drawer: req.user });
+  if (provider && FEATURES.drawNotifyMail) notifyProvider({ req, activity, capsule, provider, drawer: req.user });
 
   res.json({
     draw_id: result.drawId,
@@ -332,5 +367,5 @@ function notifyProvider({ req, activity, capsule, provider, drawer }) {
     to,
     subject: `你的文化扭蛋「${capsule.title}」被抽到了！`,
     text: lines.join('\n'),
-  }).catch((err) => console.error('notifyProvider failed:', err.message));
+  }).catch((err) => logError('mail', err, req));
 }

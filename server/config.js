@@ -7,6 +7,11 @@ try { process.loadEnvFile(fileURLToPath(new URL('../.env', import.meta.url))); }
 export const env = process.env;
 export const isProd = env.NODE_ENV === 'production';
 
+// Feature toggles. Off unless set to 1 (decision 35).
+export const FEATURES = {
+  drawNotifyMail: env.DRAW_NOTIFY_MAIL?.trim() === '1', // mail the provider when their capsule is drawn
+};
+
 export const adminEmails = new Set(
   (env.ADMIN_EMAILS || '')
     .split(',')

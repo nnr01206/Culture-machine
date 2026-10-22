@@ -49,7 +49,7 @@ const app = spawn(process.execPath, ['app.js'], {
   cwd: new URL('..', import.meta.url),
   env: {
     ...process.env, PORT: '3101', NODE_ENV: 'test', MAIL_DEV_LOG: '1',
-    LINE_CHANNEL_ID: CHANNEL_ID, LINE_CHANNEL_SECRET: 'secret', LINE_CALLBACK_URL: '', // ignore the dev .env's LINE settings
+    LINE_CHANNEL_ID: ` ${CHANNEL_ID} `, LINE_CHANNEL_SECRET: 'secret ', LINE_CALLBACK_URL: '', // stray spaces must not matter // ignore the dev .env's LINE settings
     LINE_AUTHORIZE_URL: `http://127.0.0.1:${LINE_PORT}/authorize`, LINE_API_BASE: `http://127.0.0.1:${LINE_PORT}`,
   },
   stdio: ['ignore', 'ignore', 'inherit'],
@@ -155,6 +155,45 @@ const draw = await amyApi(`/activities/${slug}/draw`, 'POST');
 check(draw.status === 200 && draw.data.provider?.nickname === 'x' && draw.data.provider.email === 'cat@contact.test', 'drawer sees the provider\'s contact email');
 const catMe = (await catApi(`/activities/${slug}/me`)).data;
 check(catMe.myCapsules[0]?.drawnBy?.length === 1 && catMe.myCapsules[0].drawnBy[0].nickname === 'x', 'no-email provider sees the draw in their records');
+
+// --- First-time LINE user who types the email of an existing email account: merge after proving it
+const plantCode = (email) => db.query('INSERT INTO login_codes (email, code_hash, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL 10 MINUTE)', [email, sha(`${email}:654321`)]);
+await plantCode('dan@example.com');
+const danVerify = await fetch(`${APP}/api/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'dan@example.com', code: '654321' }) });
+const danEmail = api(cookieOf(danVerify, 'cm_session'));
+await danEmail('/me/profile', 'PUT', { ...profile, nickname: 'Dan 舊' });
+const danId = (await danEmail('/auth/me')).data.user.profile.id;
+await danEmail(`/activities/${slug}/capsules`, 'POST', capsule);
+const [[{ n: usersBefore }]] = await db.query('SELECT COUNT(*) AS n FROM users');
+
+const danLine = api((await lineLogin({ sub: 'U-dan', name: 'Dan' })).session); // LINE gives no email
+const danForm = { ...profile, nickname: 'Dan 新', contact_email: 'Dan@Example.com' };
+const offer = await danLine('/me/profile', 'PUT', danForm);
+check(offer.status === 409 && offer.data.code === 'MERGE_AVAILABLE', 'new LINE user typing an existing account\'s email is offered a merge');
+const [[{ n: usersAfterOffer }]] = await db.query('SELECT COUNT(*) AS n FROM users');
+check(Number(usersAfterOffer) === Number(usersBefore), 'nothing is created while the merge is pending');
+check((await danLine('/me/merge', 'POST', { ...danForm, email: 'dan@example.com', code: '000000' })).status === 400, 'merge with a wrong code rejected');
+await plantCode('dan@example.com');
+check((await danLine('/me/merge', 'POST', { ...danForm, email: 'dan@example.com', code: '654321' })).status === 200, 'merge with the emailed code succeeds');
+me = (await danLine('/auth/me')).data.user;
+check(me.profile?.id === danId && me.profile.nickname === 'Dan 新' && me.email === 'dan@example.com', 'LINE login now opens the old account, updated with the new form');
+check((await danLine(`/activities/${slug}/me`)).data.myCapsules.length === 1, 'old capsules are kept after the merge');
+check((await danEmail('/auth/me')).data.user.profile?.id === danId, 'email login still opens the same account');
+const [[{ n: usersAfterMerge }]] = await db.query('SELECT COUNT(*) AS n FROM users');
+check(Number(usersAfterMerge) === Number(usersBefore), 'no duplicate account after the merge');
+
+const eve = api((await lineLogin({ sub: 'U-eve', name: 'Eve' })).session);
+check((await eve('/me/profile', 'PUT', { ...profile, contact_email: 'dan@example.com' })).status === 200, 'an account already tied to a LINE login is not offered again');
+check((await eve('/me/merge', 'POST', { ...profile, email: 'dan@example.com', code: '654321' })).status === 409, 'merge API refuses once the user has a profile');
+
+await plantCode('fay@example.com');
+const fayVerify = await fetch(`${APP}/api/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'fay@example.com', code: '654321' }) });
+await api(cookieOf(fayVerify, 'cm_session'))('/me/profile', 'PUT', profile);
+const fayLine = api((await lineLogin({ sub: 'U-fay', name: 'Fay' })).session);
+check((await fayLine('/me/profile', 'PUT', { ...profile, contact_email: 'fay@example.com' })).status === 409, 'merge offered for another email account');
+check((await fayLine('/me/profile', 'PUT', { ...profile, contact_email: 'fay@example.com', skip_merge: true })).status === 200, '"not me" creates a separate account');
+const [[fayRows]] = await db.query("SELECT COUNT(*) AS n FROM users WHERE email = 'fay@example.com' OR line_user_id = 'U-fay'");
+check(Number(fayRows.n) === 2, 'the email account and the new LINE account stay separate');
 
 // --- Failure paths
 const cancelled = await lineLogin({ sub: 'U-x' }, { tamper: { query: { error: 'access_denied' } } });

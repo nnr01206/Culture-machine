@@ -9,6 +9,7 @@ import { lineRouter } from './server/line.js';
 import { adminRouter } from './server/admin.js';
 import { publicRouter } from './server/public-api.js';
 import { participantRouter } from './server/participant.js';
+import { logError, monitorRequests, startMonitor } from './server/monitor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'public');
@@ -20,8 +21,11 @@ await migrate().catch((err) => {
   console.error('DB migrate failed:', dbError);
 });
 
+startMonitor();
+
 const app = express();
 app.set('trust proxy', 1); // Passenger/Apache sits in front; needed for secure cookies.
+app.use(monitorRequests);
 app.use(express.json({ limit: '100kb' }));
 
 app.get('/api/health', async (req, res) => {
@@ -46,8 +50,12 @@ app.use(express.static(publicDir));
 app.get('/{*splat}', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 
 app.use((err, req, res, next) => {
-  if (!err.status) console.error(err);
-  res.status(err.status || 500).json({ error: err.status ? err.message : (err.message || err.code || '伺服器錯誤') });
+  // 4xx are expected answers (bad input, not logged in); anything else is a real failure worth keeping.
+  if (!err.status || err.status >= 500) logError('request', err, req);
+  res.status(err.status || 500).json({
+    error: err.status ? err.message : (err.message || err.code || '伺服器錯誤'),
+    ...(err.status && err.code && { code: err.code }),
+  });
 });
 
 // Passenger supplies PORT (or hooks listen); 3000 is for local dev.

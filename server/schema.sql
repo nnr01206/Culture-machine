@@ -102,3 +102,39 @@ CREATE TABLE IF NOT EXISTS draws (
   FOREIGN KEY (capsule_id) REFERENCES capsules(id),
   FOREIGN KEY (drawer_id) REFERENCES users(id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- One row per minute per Node process: traffic, latency and resource use (decision 34). Kept 14 days.
+CREATE TABLE IF NOT EXISTS metrics (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  minute DATETIME NOT NULL,
+  pid INT NOT NULL,
+  requests INT NOT NULL,
+  status_4xx INT NOT NULL,
+  status_5xx INT NOT NULL,
+  p50_ms INT NULL,
+  p95_ms INT NULL,
+  max_ms INT NULL,
+  max_in_flight INT NOT NULL COMMENT 'most requests being handled at the same moment',
+  rss_mb DECIMAL(8,1) NOT NULL,
+  heap_mb DECIMAL(8,1) NOT NULL,
+  cpu_pct DECIMAL(6,1) NOT NULL COMMENT '100 = one full CPU core',
+  loop_p99_ms DECIMAL(8,1) NULL COMMENT 'event loop delay; high means Node itself is overloaded',
+  db_max_busy INT NOT NULL COMMENT 'most DB connections in use at once (pool size in db.js)',
+  db_waits INT NOT NULL COMMENT 'queries that had to wait for a free DB connection',
+  INDEX idx_metrics_minute (minute)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Unexpected failures (5xx, LINE login, mail, crashes) so they can be read from the admin page. Kept 90 days.
+-- Paths are stored without the query string, so no OAuth codes or other secrets end up here.
+CREATE TABLE IF NOT EXISTS error_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  source VARCHAR(30) NOT NULL COMMENT 'request | line_login | mail | process',
+  method VARCHAR(10) NULL,
+  path VARCHAR(255) NULL,
+  status INT NULL,
+  message VARCHAR(1000) NOT NULL,
+  stack TEXT NULL,
+  pid INT NOT NULL,
+  INDEX idx_error_logs_created (created_at)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

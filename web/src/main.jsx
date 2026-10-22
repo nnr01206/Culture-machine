@@ -14,6 +14,7 @@ import AdminLayout from './pages/admin/AdminLayout.jsx';
 import AdminEvents from './pages/admin/AdminEvents.jsx';
 import AdminEvent from './pages/admin/AdminEvent.jsx';
 import AdminMailTest from './pages/admin/AdminMailTest.jsx';
+import AdminSystem from './pages/admin/AdminSystem.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')).render(
             <Route index element={<AdminEvents />} />
             <Route path="events/:id" element={<AdminEvent />} />
             <Route path="mail" element={<AdminMailTest />} />
+            <Route path="system" element={<AdminSystem />} />
           </Route>
         </Routes>
         </BalloonProvider>

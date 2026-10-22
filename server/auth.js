@@ -5,7 +5,7 @@ import { sendMail } from './mail.js';
 import { AUTH, adminEmails, isProd, env } from './config.js';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
+export const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function readCookie(req, name) {
@@ -112,17 +112,22 @@ authRouter.post('/request-code', async (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.post('/verify', async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const code = String(req.body?.code || '').trim();
+// Checks an emailed code and uses it up. Also proves email ownership when merging accounts.
+export async function consumeCode(email, code) {
   const [[row]] = await pool.query(
     `SELECT id FROM login_codes
      WHERE email = ? AND code_hash = ? AND used_at IS NULL AND expires_at > UTC_TIMESTAMP()
      ORDER BY id DESC LIMIT 1`,
-    [email, sha256(`${email}:${code}`)],
+    [email, sha256(`${email}:${String(code || '').trim()}`)],
   );
-  if (!row) return res.status(400).json({ error: '驗證碼錯誤或已過期' });
+  if (!row) return false;
   await pool.query('UPDATE login_codes SET used_at = UTC_TIMESTAMP() WHERE id = ?', [row.id]);
+  return true;
+}
+
+authRouter.post('/verify', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!(await consumeCode(email, req.body?.code))) return res.status(400).json({ error: '驗證碼錯誤或已過期' });
 
   const isAdmin = adminEmails.has(email);
   await startSession(res, { email, isAdmin });
@@ -131,7 +136,7 @@ authRouter.post('/verify', async (req, res) => {
 
 // Which sign-in methods the login page should offer.
 authRouter.get('/options', (req, res) => {
-  res.json({ line: Boolean(env.LINE_CHANNEL_ID && env.LINE_CHANNEL_SECRET) });
+  res.json({ line: Boolean(env.LINE_CHANNEL_ID?.trim() && env.LINE_CHANNEL_SECRET?.trim()) });
 });
 
 authRouter.get('/me', async (req, res) => {
